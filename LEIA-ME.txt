@@ -1,0 +1,32 @@
+PLANEJAMENTO & EXECUÇÃO — PWA OFFLINE
+
+Arquivos:
+- index.html: aplicativo
+- manifest.json: configuração do PWA
+- sw.js: funcionamento offline
+- xlsx.full.min.js: biblioteca Excel local
+- icon-192.png / icon-512.png: ícones
+
+COMO INSTALAR NO SAMSUNG
+
+IMPORTANTE:
+O PWA precisa ser servido por HTTPS (ou localhost). Não basta abrir o
+index.html diretamente pelo gerenciador de arquivos para instalar o PWA.
+
+Forma recomendada:
+1. Coloque esta pasta em um servidor HTTPS, hospedagem estática ou serviço
+   de compartilhamento que forneça HTTPS.
+2. Abra o endereço no Chrome do Samsung.
+3. Aguarde o aplicativo carregar uma vez com internet.
+4. No Chrome, use "Adicionar à tela inicial" / "Instalar aplicativo".
+5. Depois de instalado, o aplicativo pode ser aberto pelo ícone e continuar
+   funcionando offline.
+
+DADOS:
+Os registros continuam sendo armazenados localmente no navegador por
+localStorage, como no HTML original. Use "Backup dos dados" periodicamente.
+A exportação XLSX agora usa a biblioteca local, sem depender do CDN.
+
+OBSERVAÇÃO:
+O PWA é instalado por dispositivo/navegador. Se os dados forem apagados
+do navegador, eles podem ser perdidos; mantenha backups JSON.

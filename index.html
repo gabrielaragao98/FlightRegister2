@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1f6f43">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Planejamento & Execução">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Planejamento & Execução - Operações Agrícolas</title>
+<script src="xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:#f4f6f5;color:#17231b}
+header{background:#1f6f43;color:white;padding:16px;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:20px} header small{opacity:.85}
+nav{display:flex;gap:6px;padding:8px;background:white;position:sticky;top:65px;z-index:4;overflow:auto}
+nav button{border:0;padding:10px 13px;border-radius:8px;background:#e9eeeb;white-space:nowrap;cursor:pointer;font-weight:bold}
+nav button.active{background:#1f6f43;color:white}
+main{max-width:1100px;margin:auto;padding:14px}
+.card{background:white;border-radius:12px;padding:15px;margin-bottom:14px;box-shadow:0 1px 5px #0001}
+h2{font-size:18px;margin:0 0 12px} h3{font-size:15px;margin:10px 0 6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+label{font-size:12px;font-weight:bold;display:block;margin-bottom:4px}
+input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5cf;border-radius:7px;font-size:14px;background:white}
+textarea{min-height:70px}
+button.primary{background:#1f6f43;color:#fff;border:0;border-radius:8px;padding:10px 14px;font-weight:bold;cursor:pointer}
+button.secondary{background:#e9eeeb;border:0;border-radius:8px;padding:10px 14px;cursor:pointer}
+button.danger{background:#a83232;color:white;border:0;border-radius:8px;padding:8px 10px;cursor:pointer}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:8px;border-bottom:1px solid #e4e8e5;text-align:left;vertical-align:middle}
+th{background:#f0f3f1}
+.badge{display:inline-block;padding:5px 8px;border-radius:20px;font-size:11px;font-weight:bold}
+.ok{background:#dff2e5;color:#17622f}.warn{background:#fff0c2;color:#775500}.dangerbg{background:#ffdede;color:#8b2020}
+.warning{padding:10px;border-radius:8px;margin:7px 0;background:#fff0c2;border-left:4px solid #d49b00}
+.flight-alert{padding:12px;border-radius:8px;margin-bottom:12px;background:#e1f5fe;border-left:4px solid #0288d1;color:#01579b}
+.next-mission-card{background:#eef8f2;border:2px solid #1f6f43;border-radius:12px;padding:16px;margin-bottom:14px}
+.hidden{display:none}.muted{color:#69756e;font-size:12px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kpi{padding:12px;border-radius:9px;background:#eef3ef;text-align:center}.kpi b{font-size:22px;display:block}
+
+/* Estilos do Calendário */
+.calendar-controls{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;background:#e4e8e5;padding:4px;border-radius:8px}
+.calendar-day-header{background:#1f6f43;color:white;text-align:center;padding:6px;font-size:12px;font-weight:bold;border-radius:4px}
+.calendar-cell{background:white;min-height:90px;padding:4px;border-radius:4px;font-size:11px;display:flex;flex-direction:column;gap:4px}
+.calendar-cell.other-month{background:#f9fbf9;color:#aaa}
+.calendar-day-num{font-weight:bold;margin-bottom:2px}
+.calendar-event{background:#dff2e5;color:#17622f;padding:4px;border-radius:4px;border-left:3px solid #1f6f43;font-size:10px;line-height:1.2}
+
+@media(max-width:600px){
+  table{display:block;overflow-x:auto;white-space:nowrap}
+  .kpis{grid-template-columns:1fr 1fr}
+  .calendar-grid{grid-template-columns:repeat(7,minmax(45px,1fr));overflow-x:auto}
+  .calendar-cell{min-height:70px;font-size:9px}
+}
+</style>
+</head>
+<body>
+<header>
+<h1>Planejamento & Execução</h1>
+<small>Registro de missões, fenologia e controle de parâmetros de voo</small>
+</header>
+
+<nav>
+<button onclick="showTab('dashboard')" id="bt-dashboard" class="active">Resumo / Início</button>
+<button onclick="showTab('planning')" id="bt-planning">Planejamento</button>
+<button onclick="showTab('calendar')" id="bt-calendar">Calendário</button>
+<button onclick="showTab('execution')" id="bt-execution">Execução</button>
+<button onclick="showTab('params')" id="bt-params">Parâmetros</button>
+<button onclick="showTab('data')" id="bt-data">Planilha</button>
+</nav>
+
+<main>
+<section id="dashboard">
+<div id="mondayFlightAlert"></div>
+
+<!-- Card da Próxima Missão -->
+<div id="nextMissionBox" class="next-mission-card">
+  <div style="display:flex; justify-shadow:space-between; align-items:center;">
+    <h2 style="color:#1f6f43; margin:0;">🎯 Próxima Missão Programada</h2>
+  </div>
+  <div id="nextMissionContent" style="margin-top:10px;">
+    <p class="muted">Buscando próxima missão...</p>
+  </div>
+</div>
+
+<div class="card">
+<h2>Resumo Geral</h2>
+<div class="kpis">
+<div class="kpi"><b id="nPlan">0</b>planejadas</div>
+<div class="kpi"><b id="nExec">0</b>executadas</div>
+<div class="kpi"><b id="nWarn">0</b>com warning</div>
+</div>
+</div>
+<div class="card">
+<h2>Alertas Atuais</h2>
+<div id="dashboardWarnings" class="muted">Nenhum alerta.</div>
+</div>
+<div class="card">
+<h2>Próximas Atividades</h2>
+<div id="nextActivities" class="muted">Nenhuma atividade planejada.</div>
+</div>
+</section>
+
+<section id="planning" class="hidden">
+<div class="card">
+<h2>Carregar Planejamento (Excel / CSV)</h2>
+<p class="muted">Selecione o arquivo. Em seguida, você poderá escolher quais colunas importar.</p>
+<input type="file" id="importFile" accept=".xlsx, .xls, .csv" onchange="handleFileSelect(event)">
+
+<div id="columnMappingArea" class="hidden" style="margin-top:15px; padding:12px; background:#f0f4f1; border-radius:8px;">
+  <h3>Mapeamento de Colunas do Excel</h3>
+  <p class="muted">Indique qual coluna da sua planilha corresponde a cada campo do planejamento:</p>
+  <div class="grid">
+    <div><label>ID da Atividade</label><select id="mapId"></select></div>
+    <div><label>Data Planejada</label><select id="mapDate"></select></div>
+    <div><label>Protocolo / Atividade</label><select id="mapActivity"></select></div>
+    <div><label>Local / Área</label><select id="mapArea"></select></div>
+    <div><label>Responsável</label><select id="mapResponsible"></select></div>
+    <div><label>Observação</label><select id="mapObs"></select></div>
+  </div>
+  <div class="actions" style="margin-top:10px;">
+    <button class="primary" onclick="confirmImport()">Confirmar e Importar Colunas</button>
+  </div>
+</div>
+</div>
+
+<div class="card">
+<h2>Nova Atividade Planejada (Manual)</h2>
+<div class="grid">
+<div><label>ID da atividade</label><input id="pId" placeholder="Ex.: A001"></div>
+<div><label>Data planejada</label><input id="pDate" type="date"></div>
+<div><label>Protocolo / Atividade</label><input id="pActivity" placeholder="Ex.: Voo MAVIC3M, Aplicação"></div>
+<div><label>Responsável</label><input id="pResponsible"></div>
+<div><label>Área / Local</label><input id="pArea"></div>
+<div><label>Observação</label><input id="pObs"></div>
+</div>
+<div class="actions"><button class="primary" onclick="addPlanning()">Adicionar ao planejamento</button></div>
+</div>
+<div class="card"><h2>Atividades Planejadas</h2><div id="planningTable"></div></div>
+</section>
+
+<section id="calendar" class="hidden">
+<div class="card">
+<div class="calendar-controls">
+<button class="secondary" onclick="changeMonth(-1)">&lt; Anterior</button>
+<h2 id="calendarTitle" style="margin:0">Mês / Ano</h2>
+<button class="secondary" onclick="changeMonth(1)">Próximo &gt;</button>
+</div>
+<div id="calendarView"></div>
+</div>
+</section>
+
+<section id="execution" class="hidden">
+<div class="card">
+<h2>Registrar Execução de Missão</h2>
+<div class="grid">
+<div><label>Missão / Atividade Planejada</label><select id="ePlan" onchange="loadExecutionParams()"></select></div>
+<div><label>Data real da execução</label><input id="eDate" type="date"></div>
+<div><label>Operador / Responsável</label><input id="eOperator"></div>
+<div><label>Horário de início</label><input id="eStartTime" type="time"></div>
+<div><label>Condição Ambiental</label><input id="eEnvCondition" placeholder="Ex.: Ensolarado, Parcialmente Nublado"></div>
+<div>
+  <label>Vento Drone (m/s)</label>
+  <input id="eWindSpeedMs" type="number" step="any" placeholder="Ex.: 3.5" oninput="convertWindSpeed()">
+</div>
+<div>
+  <label>Vento Convertido (km/h)</label>
+  <input id="eWindSpeedKmh" type="text" readonly style="background:#e9eeeb; font-weight:bold;">
+</div>
+<div>
+  <label>RTK Ligado?</label>
+  <select id="eRtk">
+    <option value="OFF">OFF</option>
+    <option value="ON">ON</option>
+  </select>
+</div>
+<div>
+  <label>Foto de Calibração Realizada?</label>
+  <select id="eCalibPhoto">
+    <option value="SIM">SIM</option>
+    <option value="NÃO">NÃO</option>
+  </select>
+</div>
+</div>
+
+<div id="windWarningBox"></div>
+
+<h3>Fase Fenológica dos Genótipos</h3>
+<div class="grid">
+<div>
+  <label>Veloz</label>
+  <select id="pheno_Veloz">
+    <option value="">Selecione...</option>
+    <option value="Perfilhamento">Perfilhamento</option>
+    <option value="Alongamento">Alongamento</option>
+    <option value="Emborrachamento">Emborrachamento</option>
+    <option value="Espigamento">Espigamento</option>
+    <option value="Florescimento">Florescimento</option>
+    <option value="Enchimento">Enchimento</option>
+    <option value="Maturação">Maturação</option>
+  </select>
+</div>
+<div>
+  <label>Calibre</label>
+  <select id="pheno_Calibre">
+    <option value="">Selecione...</option>
+    <option value="Perfilhamento">Perfilhamento</option>
+    <option value="Alongamento">Alongamento</option>
+    <option value="Emborrachamento">Emborrachamento</option>
+    <option value="Espigamento">Espigamento</option>
+    <option value="Florescimento">Florescimento</option>
+    <option value="Enchimento">Enchimento</option>
+    <option value="Maturação">Maturação</option>
+  </select>
+</div>
+<div>
+  <label>Talismã</label>
+  <select id="pheno_Talisma">
+    <option value="">Selecione...</option>
+    <option value="Perfilhamento">Perfilhamento</option>
+    <option value="Alongamento">Alongamento</option>
+    <option value="Emborrachamento">Emborrachamento</option>
+    <option value="Espigamento">Espigamento</option>
+    <option value="Florescimento">Florescimento</option>
+    <option value="Enchimento">Enchimento</option>
+    <option value="Maturação">Maturação</option>
+  </select>
+</div>
+<div>
+  <label>Titan</label>
+  <select id="pheno_Titan">
+    <option value="">Selecione...</option>
+    <option value="Perfilhamento">Perfilhamento</option>
+    <option value="Alongamento">Alongamento</option>
+    <option value="Emborrachamento">Emborrachamento</option>
+    <option value="Espigamento">Espigamento</option>
+    <option value="Florescimento">Florescimento</option>
+    <option value="Enchimento">Enchimento</option>
+    <option value="Maturação">Maturação</option>
+  </select>
+</div>
+<div>
+  <label>Motriz</label>
+  <select id="pheno_Motriz">
+    <option value="">Selecione...</option>
+    <option value="Perfilhamento">Perfilhamento</option>
+    <option value="Alongamento">Alongamento</option>
+    <option value="Emborrachamento">Emborrachamento</option>
+    <option value="Espigamento">Espigamento</option>
+    <option value="Florescimento">Florescimento</option>
+    <option value="Enchimento">Enchimento</option>
+    <option value="Maturação">Maturação</option>
+  </select>
+</div>
+<div>
+  <label>Ponteiro</label>
+  <select id="pheno_Ponteiro">
+    <option value="">Selecione...</option>
+    <option value="Perfilhamento">Perfilhamento</option>
+    <option value="Alongamento">Alongamento</option>
+    <option value="Emborrachamento">Emborrachamento</option>
+    <option value="Espigamento">Espigamento</option>
+    <option value="Florescimento">Florescimento</option>
+    <option value="Enchimento">Enchimento</option>
+    <option value="Maturação">Maturação</option>
+  </select>
+</div>
+</div>
+
+<div id="execParams" style="margin-top:14px"></div>
+
+<div style="margin-top:10px">
+  <label>Observações da execução</label>
+  <textarea id="eObs"></textarea>
+</div>
+
+<div id="execWarnings"></div>
+<div class="actions"><button class="primary" onclick="saveExecution()">Salvar execução da missão</button></div>
+</div>
+<div class="card"><h2>Histórico de Execuções</h2><div id="executionTable"></div></div>
+</section>
+
+<section id="params" class="hidden">
+<div class="card">
+<h2>Cadastro de Parâmetros e Limites</h2>
+<p class="muted">Defina parâmetros operacionais esperados para validação automática na execução.</p>
+<div class="grid">
+<div><label>Protocolo / Atividade</label><input id="qActivity" placeholder="Ex.: voo, aplicação"></div>
+<div><label>Parâmetro</label><input id="qName" placeholder="Ex.: altura_voo"></div>
+<div><label>Unidade</label><input id="qUnit" placeholder="Ex.: m, %"></div>
+<div><label>Mínimo aceitável</label><input id="qMin" type="number" step="any"></div>
+<div><label>Máximo aceitável</label><input id="qMax" type="number" step="any"></div>
+<div><label>Warning (%)</label><input id="qWarn" type="number" step="any" value="10"></div>
+</div>
+<div class="actions"><button class="primary" onclick="addParam()">Adicionar parâmetro</button></div>
+</div>
+<div class="card"><h2>Parâmetros Cadastrados</h2><div id="paramsTable"></div></div>
+</section>
+
+<section id="data" class="hidden">
+<div class="card">
+<h2>Planilha e Registros Exportáveis</h2>
+<p class="muted">Os dados ficam salvos localmente. Exporte para Excel para compartilhamento.</p>
+<div class="actions">
+<button class="primary" onclick="exportXLSX()">Gerar Excel (.xlsx)</button>
+<button class="secondary" onclick="exportCSV()">Gerar CSV</button>
+<button class="secondary" onclick="backupJSON()">Backup dos dados</button>
+<label class="secondary" style="cursor:pointer">Restaurar backup <input type="file" accept=".json" onchange="restoreJSON(event)" style="display:none"></label>
+<button class="danger" onclick="clearAll()">Apagar todos os dados</button>
+</div>
+</div>
+<div class="card"><h2>Visualização Consolidada dos Registros</h2><div id="dataTable"></div></div>
+</section>
+</main>
+
+<script>
+const KEY='planejamento_execucao_v3';
+let db=JSON.parse(localStorage.getItem(KEY)||'{"planning":[],"params":[],"execution":[]}');
+let currentDate = new Date();
+let rawExcelRows = [];
+
+function saveDB(){localStorage.setItem(KEY,JSON.stringify(db));renderAll()}
+function esc(x){return String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+
+function showTab(id){
+ document.querySelectorAll('main>section').forEach(x=>x.classList.add('hidden'));
+ document.getElementById(id).classList.remove('hidden');
+ document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+ document.getElementById('bt-'+id).classList.add('active');
+ renderAll();
+}
+
+/* CARREGAMENTO DE EXCEL COM SELEÇÃO DE COLUNAS (DE-PARA) */
+function handleFileSelect(e) {
+ const file = e.target.files[0];
+ if(!file) return;
+ const reader = new FileReader();
+ reader.onload = function(evt) {
+   const data = new Uint8Array(evt.target.result);
+   const workbook = XLSX.read(data, {type: 'array'});
+   const firstSheet = workbook.SheetNames[0];
+   rawExcelRows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+
+   if(!rawExcelRows.length) {
+     alert('A planilha está vazia!');
+     return;
+   }
+
+   const headers = Object.keys(rawExcelRows[0]);
+   populateColumnDropdowns(headers);
+   document.getElementById('columnMappingArea').classList.remove('hidden');
+ };
+ reader.readAsArrayBuffer(file);
+}
+
+function populateColumnDropdowns(headers) {
+ const selects = ['mapId', 'mapDate', 'mapActivity', 'mapArea', 'mapResponsible', 'mapObs'];
+ selects.forEach(selId => {
+   const sel = document.getElementById(selId);
+   sel.innerHTML = '<option value="">-- Selecione a coluna --</option>' + 
+     headers.map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join('');
+ });
+
+ // Tenta pré-selecionar por similaridade de nome
+ headers.forEach(h => {
+   const lower = h.toLowerCase();
+   if(lower.includes('id')) document.getElementById('mapId').value = h;
+   if(lower.includes('data') || lower.includes('date')) document.getElementById('mapDate').value = h;
+   if(lower.includes('ativ') || lower.includes('protoc') || lower.includes('objetivo')) document.getElementById('mapActivity').value = h;
+   if(lower.includes('area') || lower.includes('local') || lower.includes('talhao')) document.getElementById('mapArea').value = h;
+   if(lower.includes('resp') || lower.includes('operador')) document.getElementById('mapResponsible').value = h;
+   if(lower.includes('obs')) document.getElementById('mapObs').value = h;
+ });
+}
+
+function confirmImport() {
+ const colId = mapId.value;
+ const colDate = mapDate.value;
+ const colAct = mapActivity.value;
+ const colArea = mapArea.value;
+ const colResp = mapResponsible.value;
+ const colObs = mapObs.value;
+
+ if(!colAct) {
+   alert('A coluna de Protocolo/Atividade é obrigatória.');
+   return;
+ }
+
+ let count = 0;
+ rawExcelRows.forEach(r => {
+   let dateVal = colDate ? r[colDate] : '';
+   if(typeof dateVal === 'number') {
+     dateVal = new Date((dateVal - (25567 + 2)) * 86400 * 1000).toISOString().slice(0,10);
+   }
+
+   const item = {
+     id: String((colId && r[colId]) ? r[colId] : 'M' + String(Date.now()).slice(-4) + count),
+     date: String(dateVal || ''),
+     activity: String(r[colAct] || ''),
+     area: String(colArea && r[colArea] ? r[colArea] : ''),
+     responsible: String(colResp && r[colResp] ? r[colResp] : ''),
+     obs: String(colObs && r[colObs] ? r[colObs] : '')
+   };
+
+   if(item.activity) {
+     db.planning.push(item);
+     count++;
+   }
+ });
+
+ saveDB();
+ alert(`${count} missões importadas com sucesso!`);
+ document.getElementById('columnMappingArea').classList.add('hidden');
+ document.getElementById('importFile').value = '';
+}
+
+function addPlanning(){
+ const a={id:pId.value.trim()||'M'+String(Date.now()).slice(-5),date:pDate.value,activity:pActivity.value.trim(),responsible:pResponsible.value.trim(),area:pArea.value.trim(),obs:pObs.value.trim()};
+ if(!a.activity){alert('Informe a atividade ou protocolo.');return}
+ db.planning.push(a); saveDB();
+ ['pId','pDate','pActivity','pResponsible','pArea','pObs'].forEach(id=>document.getElementById(id).value='');
+}
+
+/* CONVERSÃO DE VENTO E AVISO M/S -> KM/H */
+function convertWindSpeed() {
+ const msVal = parseFloat(eWindSpeedMs.value);
+ const warnDiv = document.getElementById('windWarningBox');
+ 
+ if(isNaN(msVal) || msVal < 0) {
+   eWindSpeedKmh.value = '';
+   warnDiv.innerHTML = '';
+   return;
+ }
+
+ const kmhVal = (msVal * 3.6).toFixed(1);
+ eWindSpeedKmh.value = `${kmhVal} km/h`;
+
+ // Limite recomendado para voos de mapeamento com drone (ex: > 8 m/s ou ~28.8 km/h)
+ const MAX_SAFE_WIND_MS = 8.0; 
+ if(msVal > MAX_SAFE_WIND_MS) {
+   warnDiv.innerHTML = `
+     <div class="warning" style="background:#ffdede; border-left-color:#a83232;">
+       <b style="color:#8b2020">⚠️ ALERTA DE VENTO ALTO (${msVal} m/s | ${kmhVal} km/h):</b> 
+       A velocidade do vento excede o parâmetro ideal de voo (8.0 m/s). 
+       Isso pode ocasionar estabilização deficiente, borramento de fotos e afetar negativamente a taxa de sobreposição (overlap) e o processamento do ortomosaico.
+     </div>
+   `;
+ } else {
+   warnDiv.innerHTML = '';
+ }
+}
+
+function startMission(planId) {
+ showTab('execution');
+ ePlan.value = planId;
+ loadExecutionParams();
+ window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function addParam(){
+ const q={id:Date.now(),activity:qActivity.value.trim(),name:qName.value.trim(),unit:qUnit.value.trim(),min:qMin.value===''?null:Number(qMin.value),max:qMax.value===''?null:Number(qMax.value),warn:qWarn.value===''?10:Number(qWarn.value)};
+ if(!q.activity||!q.name){alert('Informe atividade e parâmetro.');return}
+ db.params.push(q);saveDB();['qActivity','qName','qUnit','qMin','qMax'].forEach(id=>document.getElementById(id).value='');qWarn.value=10;
+}
+
+function addParamField(p){
+ return `<div class="card" style="margin:8px 0;background:#fafcfb"><div class="grid">
+<div><label>${esc(p.name)} ${p.unit?'('+esc(p.unit)+')':''}</label><input class="execInput" data-pid="${p.id}" data-name="${esc(p.name)}" data-unit="${esc(p.unit)}" type="number" step="any"></div>
+<div><label>Limites Espetados</label><div class="muted">${p.min!==null?'mín '+p.min:'sem mín'} · ${p.max!==null?'máx '+p.max:'sem máx'} · warning ${p.warn}%</div></div>
+</div><div id="warn-${p.id}"></div></div>`;
+}
+
+function loadExecutionParams(){
+ const pl=db.planning.find(x=>x.id===ePlan.value);
+ const ps=pl?db.params.filter(p=>p.activity.toLowerCase()===pl.activity.toLowerCase()):[];
+ execParams.innerHTML=ps.length?ps.map(addParamField).join(''):'<p class="muted">Nenhum parâmetro customizado cadastrado para este protocolo.</p>';
+ execWarnings.innerHTML='';
+ document.querySelectorAll('.execInput').forEach(i=>i.addEventListener('input',()=>validateOne(i)));
+}
+
+function validateOne(inp){
+ const p=db.params.find(x=>String(x.id)===inp.dataset.pid); if(!p)return;
+ const v=Number(inp.value); let msg='',cls='ok';
+ if(inp.value!=='' && p.min!==null && v<p.min){msg=`ABAIXO DO LIMITE: ${v} < ${p.min}`;cls='dangerbg'}
+ else if(inp.value!=='' && p.max!==null && v>p.max){msg=`ACIMA DO LIMITE: ${v} > ${p.max}`;cls='dangerbg'}
+ else if(inp.value!=='' && p.min!==null && p.max!==null){
+   const range=p.max-p.min, low=p.min+range*p.warn/100, high=p.max-range*p.warn/100;
+   if(v<low||v>high){msg='WARNING: próximo do limite';cls='warn'}
+ }
+ document.getElementById('warn-'+p.id).innerHTML=msg?`<div class="warning"><span class="badge ${cls}">${esc(msg)}</span></div>`:'';
+}
+
+function saveExecution(){
+ if(!ePlan.value){alert('Selecione uma missão.');return}
+ const pl=db.planning.find(x=>x.id===ePlan.value);
+ const values={}; document.querySelectorAll('.execInput').forEach(i=>values[i.dataset.pid]=i.value===''?null:Number(i.value));
+ const warnings=[];
+ 
+ const windMs = parseFloat(eWindSpeedMs.value);
+ if(!isNaN(windMs) && windMs > 8.0) {
+   warnings.push(`Vento Alto: ${windMs} m/s (${(windMs*3.6).toFixed(1)} km/h) - Pode afetar qualidade do ortomosaico`);
+ }
+
+ Object.entries(values).forEach(([pid,v])=>{
+   const p=db.params.find(x=>String(x.id)===pid); if(!p||v===null)return;
+   if(p.min!==null&&v<p.min)warnings.push(`${p.name}: abaixo do mínimo`);
+   if(p.max!==null&&v>p.max)warnings.push(`${p.name}: acima do máximo`);
+ });
+
+ const pheno = {
+   Veloz: document.getElementById('pheno_Veloz').value,
+   Calibre: document.getElementById('pheno_Calibre').value,
+   Talismã: document.getElementById('pheno_Talisma').value,
+   Titan: document.getElementById('pheno_Titan').value,
+   Motriz: document.getElementById('pheno_Motriz').value,
+   Ponteiro: document.getElementById('pheno_Ponteiro').value
+ };
+
+ db.execution.push({
+   id: Date.now(),
+   planId: pl.id,
+   date: eDate.value || new Date().toISOString().slice(0,10),
+   operator: eOperator.value,
+   startTime: eStartTime.value,
+   envCondition: eEnvCondition.value,
+   windSpeedMs: eWindSpeedMs.value,
+   windSpeedKmh: eWindSpeedMs.value ? (parseFloat(eWindSpeedMs.value)*3.6).toFixed(1) : '',
+   rtk: eRtk.value,
+   calibPhoto: eCalibPhoto.value,
+   phenology: pheno,
+   values,
+   warnings,
+   obs: eObs.value
+ });
+
+ saveDB(); 
+ eObs.value=''; eOperator.value=''; eStartTime.value=''; eEnvCondition.value=''; eWindSpeedMs.value=''; eWindSpeedKmh.value=''; document.getElementById('windWarningBox').innerHTML='';
+ alert(warnings.length?'Execução da missão salva com alertas (WARNING).':'Execução salva com sucesso.');
+}
+
+function renderPlanning(){
+ planningTable.innerHTML=db.planning.length?`<table><tr><th>ID</th><th>Data</th><th>Protocolo / Atividade</th><th>Área / Local</th><th>Responsável</th><th>Ação</th></tr>${db.planning.map((x,i)=>`<tr><td><b>${esc(x.id)}</b></td><td>${esc(x.date)}</td><td>${esc(x.activity)}</td><td>${esc(x.area)}</td><td>${esc(x.responsible)}</td><td><button class="primary" onclick="startMission('${esc(x.id)}')">Iniciar</button> <button class="danger" onclick="db.planning.splice(${i},1);saveDB()">Excluir</button></td></tr>`).join('')}</table>`:'<p class="muted">Nenhuma atividade planejada.</p>';
+ ePlan.innerHTML='<option value="">Selecione a missão...</option>'+db.planning.map(x=>`<option value="${esc(x.id)}">${esc(x.id)} — ${esc(x.activity)} (${esc(x.area)})</option>`).join('');
+}
+
+function renderNextMissionCard() {
+ const box = document.getElementById('nextMissionContent');
+ const executedIds = new Set(db.execution.map(e => e.planId));
+ const pending = db.planning.filter(p => !executedIds.has(p.id));
+
+ if (!pending.length) {
+   box.innerHTML = `<p class="muted">Todas as missões planejadas foram concluídas ou não há planejamento cadastrado.</p>`;
+   return;
+ }
+
+ const todayStr = new Date().toISOString().slice(0, 10);
+ pending.sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
+ const next = pending[0];
+
+ box.innerHTML = `
+   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+     <div>
+       <span class="badge ok">ID: ${esc(next.id)}</span> 
+       <b style="font-size:16px; margin-left:6px;">${esc(next.activity)}</b>
+       <div style="margin-top:6px; font-size:13px;">
+         📍 <b>Local:</b> ${esc(next.area || 'Não informado')} | 
+         📅 <b>Data Planejada:</b> ${esc(next.date || 'Sem data')} | 
+         👤 <b>Responsável:</b> ${esc(next.responsible || 'Não definido')}
+       </div>
+       ${next.obs ? `<div class="muted" style="margin-top:4px;">📝 ${esc(next.obs)}</div>` : ''}
+     </div>
+     <button class="primary" style="font-size:15px; padding:12px 20px;" onclick="startMission('${esc(next.id)}')">
+       ▶ Iniciar Missão
+     </button>
+   </div>
+ `;
+}
+
+function renderParams(){
+ paramsTable.innerHTML=db.params.length?`<table><tr><th>Protocolo</th><th>Parâmetro</th><th>Unidade</th><th>Mín.</th><th>Máx.</th><th>Warning</th><th></th></tr>${db.params.map((x,i)=>`<tr><td>${esc(x.activity)}</td><td>${esc(x.name)}</td><td>${esc(x.unit)}</td><td>${x.min??'—'}</td><td>${x.max??'—'}</td><td>${x.warn}%</td><td><button class="danger" onclick="db.params.splice(${i},1);saveDB()">Excluir</button></td></tr>`).join('')}</table>`:'<p class="muted">Nenhum parâmetro cadastrado.</p>';
+}
+
+function renderExecution(){
+ const rows=db.execution.map(x=>{
+   const pl=db.planning.find(p=>p.id===x.planId);
+   return `<tr>
+     <td>${esc(x.date)}</td>
+     <td><b>${esc(pl?.id)}</b></td>
+     <td>${esc(pl?.activity)}</td>
+     <td>${esc(x.operator)}</td>
+     <td>${esc(x.windSpeedMs?x.windSpeedMs+' m/s ('+x.windSpeedKmh+' km/h)':'—')}</td>
+     <td>RTK: ${esc(x.rtk)} | Calib: ${esc(x.calibPhoto)}</td>
+     <td>${x.warnings.length?'<span class="badge dangerbg">WARNING</span>':'<span class="badge ok">OK</span>'}</td>
+     <td>${esc(x.obs)}</td>
+   </tr>`
+ }).join('');
+ executionTable.innerHTML=db.execution.length?`<table><tr><th>Data</th><th>ID</th><th>Protocolo</th><th>Operador</th><th>Vento</th><th>Status Técnico</th><th>Status Limites</th><th>Observação</th></tr>${rows}</table>`:'<p class="muted">Nenhuma execução registrada.</p>';
+}
+
+function renderCalendar(){
+ const year = currentDate.getFullYear();
+ const month = currentDate.getMonth();
+ const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+ document.getElementById('calendarTitle').textContent = `${monthNames[month]} ${year}`;
+
+ const firstDay = new Date(year, month, 1).getDay();
+ const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+ let html = `<div class="calendar-grid">
+   <div class="calendar-day-header">Dom</div>
+   <div class="calendar-day-header">Seg</div>
+   <div class="calendar-day-header">Ter</div>
+   <div class="calendar-day-header">Qua</div>
+   <div class="calendar-day-header">Qui</div>
+   <div class="calendar-day-header">Sex</div>
+   <div class="calendar-day-header">Sáb</div>`;
+
+ for(let i=0; i<firstDay; i++){
+   html += `<div class="calendar-cell other-month"></div>`;
+ }
+
+ for(let day=1; day<=daysInMonth; day++){
+   const mStr = String(month+1).padStart(2,'0');
+   const dStr = String(day).padStart(2,'0');
+   const dateISO = `${year}-${mStr}-${dStr}`;
+   
+   const events = db.planning.filter(p => p.date === dateISO);
+   let evHtml = events.map(e => `
+     <div class="calendar-event" onclick="startMission('${esc(e.id)}')" style="cursor:pointer;" title="Clique para iniciar">
+       <b>${esc(e.id)}</b> - ${esc(e.activity)}<br>
+       📍 ${esc(e.area)}
+     </div>
+   `).join('');
+
+   html += `<div class="calendar-cell">
+     <div class="calendar-day-num">${day}</div>
+     ${evHtml}
+   </div>`;
+ }
+
+ html += `</div>`;
+ document.getElementById('calendarView').innerHTML = html;
+}
+
+function changeMonth(delta){
+ currentDate.setMonth(currentDate.getMonth() + delta);
+ renderCalendar();
+}
+
+function checkMondayFlightAlert(){
+ const today = new Date();
+ const isMonday = today.getDay() === 1; 
+ const alertDiv = document.getElementById('mondayFlightAlert');
+ 
+ if(!isMonday){
+   alertDiv.innerHTML = '';
+   return;
+ }
+
+ const startOfWeek = new Date(today);
+ const endOfWeek = new Date(today);
+ endOfWeek.setDate(today.getDate() + 6);
+
+ const flightsThisWeek = db.planning.filter(p => {
+   if(!p.date) return false;
+   const pDate = new Date(p.date + 'T00:00:00');
+   const isFlight = p.activity.toLowerCase().includes('voo') || p.activity.toLowerCase().includes('drone');
+   return isFlight && pDate >= startOfWeek && pDate <= endOfWeek;
+ });
+
+ if(flightsThisWeek.length > 0){
+   let list = flightsThisWeek.map(f => `<li><b>${f.date}</b>: ${esc(f.id)} - ${esc(f.activity)} (${esc(f.area)})</li>`).join('');
+   alertDiv.innerHTML = `
+     <div class="flight-alert">
+       <b>🚨 Alerta de Segunda-Feira: Voos/Mapeamentos Programados para esta Semana!</b>
+       <ul style="margin:6px 0 0; padding-left:20px">${list}</ul>
+     </div>
+   `;
+ } else {
+   alertDiv.innerHTML = `
+     <div class="flight-alert" style="background:#f4f6f5; border-color:#ccd5cf; color:#555">
+       ℹ️ Hoje é segunda-feira: Nenhum voo programado para esta semana.
+     </div>
+   `;
+ }
+}
+
+function renderDashboard(){
+ checkMondayFlightAlert();
+ renderNextMissionCard();
+ nPlan.textContent=db.planning.length;nExec.textContent=db.execution.length;nWarn.textContent=db.execution.filter(x=>x.warnings.length).length;
+ const ws=db.execution.filter(x=>x.warnings.length).map(x=>{const p=db.planning.find(y=>y.id===x.planId);return `<div class="warning"><b>${esc(p?.id)} — ${esc(p?.activity)}</b><br>${esc(x.warnings.join('; '))}</div>`}).join('');
+ dashboardWarnings.innerHTML=ws||'<p class="muted">Nenhum alerta registrado.</p>';
+ nextActivities.innerHTML=db.planning.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).slice(0,8).map(x=>`<p><b>${esc(x.date)}</b> — ${esc(x.activity)} · ${esc(x.area)} <button class="secondary" style="padding:2px 6px; font-size:11px;" onclick="startMission('${esc(x.id)}')">Iniciar</button></p>`).join('')||'<p class="muted">Nenhuma atividade planejada.</p>';
+}
+
+function renderData(){
+ const data=allRows();
+ dataTable.innerHTML=data.length?`<table><tr>${Object.keys(data[0]).map(k=>`<th>${esc(k)}</th>`).join('')}</tr>${data.map(r=>`<tr>${Object.values(r).map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</table>`:'<p class="muted">Nenhuma execução registrada para exportação.</p>';
+}
+
+function allRows(){
+ return db.execution.map(x=>{
+   const p=db.planning.find(y=>y.id===x.planId)||{};
+   const row={
+     ID_Missao:x.planId,
+     Data_Planejada:p.date,
+     Data_Execucao:x.date,
+     Protocolo_Atividade:p.activity,
+     Area_Local:p.area,
+     Operador:x.operator,
+     Horario_Inicio:x.startTime,
+     Condicao_Ambiental:x.envCondition,
+     Vento_MS:x.windSpeedMs,
+     Vento_KMH:x.windSpeedKmh,
+     RTK:x.rtk,
+     Foto_Calibracao:x.calibPhoto,
+     Fenologia_Veloz:x.phenology?.Veloz||'',
+     Fenologia_Calibre:x.phenology?.Calibre||'',
+     Fenologia_Talisma:x.phenology?.Talismã||'',
+     Fenologia_Titan:x.phenology?.Titan||'',
+     Fenologia_Motriz:x.phenology?.Motriz||'',
+     Fenologia_Ponteiro:x.phenology?.Ponteiro||'',
+     Status_Qualidade:x.warnings.length?'WARNING':'OK',
+     Observacao:x.obs
+   };
+   db.params.filter(q=>q.activity.toLowerCase()===String(p.activity).toLowerCase()).forEach(q=>row[q.name]=x.values[q.id]??'');
+   return row;
+ });
+}
+
+function exportXLSX(){
+ if(!window.XLSX){alert('A biblioteca do Excel não carregou. Use CSV ou verifique a conexão.');return}
+ const wb=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(db.planning),'Planejamento');
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(db.params),'Parametros');
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(allRows()),'Execucao_Missoes');
+ XLSX.writeFile(wb,'planejamento_e_execucao_missoes.xlsx');
+}
+
+function exportCSV(){
+ const rows=allRows();if(!rows.length){alert('Não há execuções para exportar.');return}
+ const keys=[...new Set(rows.flatMap(Object.keys))];const csv=[keys.join(';'),...rows.map(r=>keys.map(k=>`"${String(r[k]??'').replaceAll('"','""')}"`).join(';'))].join('\n');
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));a.download='planejamento_e_execucao.csv';a.click();
+}
+
+function backupJSON(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(db,null,2)],{type:'application/json'}));a.download='backup_missoes.json';a.click()}
+function restoreJSON(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{db=JSON.parse(r.result);saveDB();alert('Backup restaurado.')}catch{alert('Arquivo inválido.')}};r.readAsText(f)}
+function clearAll(){if(confirm('Apagar todos os dados salvos localmente?')){db={planning:[],params:[],execution:[]};saveDB()}}
+
+function renderAll(){
+ renderPlanning();
+ renderParams();
+ renderExecution();
+ renderDashboard();
+ renderCalendar();
+ renderData();
+}
+
+renderAll();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(err => {
+      console.warn('Service Worker não registrado:', err);
+    });
+  });
+}
+</script>
+</body>
+</html>
